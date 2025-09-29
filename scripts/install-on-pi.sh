@@ -8,7 +8,7 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
-PROJECT_DIR=/home/pi/metro-map
+PROJECT_DIR=/home/jeremy/metro-map
 SERVICE_NAME=metro-map.service
 
 # Install system dependencies
@@ -24,14 +24,22 @@ fi
 
 cd "$PROJECT_DIR"
 
-# Set up permissions for LED strip
+# Set up permissions for LED strip and GPIO
+usermod -a -G gpio jeremy
 chmod a+rw /dev/mem
+chmod a+rw /dev/gpiomem
 
-# Create venv and install dependencies
+# Set correct ownership
+chown -R jeremy:jeremy "$PROJECT_DIR"
+
+# Create venv and install dependencies as jeremy user
+su - jeremy << EOF
+cd "$PROJECT_DIR"
 python3 -m venv .venv
-. .venv/bin/activate
+source .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
+EOF
 
 # Check for .env file
 if [ ! -f .env ]; then

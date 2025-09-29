@@ -4,8 +4,9 @@ After=network.target
 
 [Service]
 Type=simple
-User=pi
-WorkingDirectory=/home/pi/metro-map
+User=jeremy
+Group=jeremy
+WorkingDirectory=/home/jeremy/metro-map
 Environment=PYTHONUNBUFFERED=1
 Environment=TMPDIR=/run/metro-map
 
@@ -14,12 +15,17 @@ RuntimeDirectory=metro-map
 RuntimeDirectoryMode=0755
 
 # Use the virtualenv Python
-ExecStart=/home/pi/metro-map/.venv/bin/python app.py
+ExecStart=/home/jeremy/metro-map/.venv/bin/python app.py
 
-# Reduce writes to SD card
+# Reduce writes to SD card but allow necessary access
 ReadWritePaths=/run/metro-map
-ProtectSystem=strict
-ProtectHome=read-only
+ReadWritePaths=/home/jeremy/metro-map
+ProtectSystem=false
+ProtectHome=false
+
+# Give access to GPIO
+SupplementaryGroups=gpio
+DeviceAllow=/dev/gpiomem rw
 
 # Restart settings
 Restart=always
