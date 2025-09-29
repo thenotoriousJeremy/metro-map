@@ -12,12 +12,22 @@ Setup on the Pi:
 """
 import os
 import json
+import logging
+from logging.handlers import MemoryHandler
 from flask import Flask, jsonify, request, render_template
 from led_controller import LEDController
 from wmata_client import WMATAClient
 from config import STATION_TO_LED, LINE_COLORS, LED_COUNT
 import threading
 import time
+
+# Configure minimal logging to use RAM instead of SD card
+log_handler = MemoryHandler(1024*5)  # Keep last 5KB of logs in memory
+logging.basicConfig(
+    handlers=[log_handler],
+    level=logging.WARNING,  # Only log warnings and errors
+    format='%(levelname)s: %(message)s'  # Simplified format
+)
 
 # Load station names
 with open('station_names.json', 'r') as f:
@@ -35,14 +45,28 @@ current_led_states = {}
 def update_leds():
     """Background thread to update LEDs based on real-time train positions."""
     global should_update, current_led_states
+    error_count = 0
+    last_success = time.time()
+    
     while should_update:
         try:
+            # Check memory status
+            mem_usage = get_memory_usage()
+            
+            # Check network connectivity
+            if time.time() - last_success > 300:  # No success for 5 minutes
+                logging.warning("No successful updates for 5 minutes - network issues?")
+            
             # Get current train positions
             trains = wmata_client.get_train_positions()
             
             # Clear all LEDs and states
             led_controller.clear()
             current_led_states.clear()
+            
+            # Reset error tracking on success
+            error_count = 0
+            last_success = time.time()
             
             # Collect trains at each station
             station_trains = {}
@@ -101,8 +125,13 @@ def update_leds():
             # Wait before next update
             time.sleep(10)  # Update every 10 seconds
         except Exception as e:
-            print(f"Error updating LEDs: {e}")
-            time.sleep(30)  # Wait longer on error
+            error_count += 1
+            logging.error(f"Error updating LEDs: {e}")
+            
+            # Progressive backoff on errors
+            wait_time = min(30 * error_count, 300)  # Max 5 minute wait
+            logging.warning(f"Waiting {wait_time} seconds before retry (error {error_count})")
+            time.sleep(wait_time)
 
 @app.route('/')
 def index():
@@ -141,9 +170,51 @@ def api_status():
         "auto_updates": bool(update_thread and update_thread.is_alive())
     })
 
+def get_memory_usage():
+    """Get current memory usage of the system."""
+    try:
+        with open('/proc/meminfo', 'r') as f:
+            mem_info = {}
+            for line in f:
+                key, value = line.split(':')
+                value = value.strip().split()[0]  # Remove unit (kB)
+                mem_info[key] = int(value)
+        
+        total = mem_info.get('MemTotal', 0)
+        available = mem_info.get('MemAvailable', 0)
+        used = total - available
+        
+        usage = {
+            'total_mb': total / 1024,
+            'used_mb': used / 1024,
+            'available_mb': available / 1024,
+            'usage_percent': (used / total) * 100 if total > 0 else 0
+        }
+        
+        # Log warning if memory usage is high
+        if usage['usage_percent'] > 85:
+            logging.warning(f"High memory usage: {usage['usage_percent']:.1f}%")
+            
+            # If extremely high, trigger a restart
+            if usage['usage_percent'] > 95:
+                logging.error("Critical memory usage - requesting restart")
+                import subprocess
+                subprocess.run(['systemctl', 'restart', 'metro-map'])
+                
+        return usage
+    except Exception as e:
+        logging.error(f"Error checking memory usage: {e}")
+        return None
+
 @app.route('/health')
 def health():
-    return jsonify({"status": "healthy"})
+    mem_usage = get_memory_usage()
+    return jsonify({
+        "status": "healthy",
+        "memory": mem_usage,
+        "led_initialized": led_controller.is_initialized(),
+        "updates_running": bool(update_thread and update_thread.is_alive())
+    })
 
 @app.route('/start_updates', methods=['POST'])
 def start_updates():

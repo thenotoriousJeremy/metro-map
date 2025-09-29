@@ -1,14 +1,29 @@
 [Unit]
-Description=metro-map service
+Description=DC Metro Map LED Display
 After=network.target
 
 [Service]
 Type=simple
 User=pi
 WorkingDirectory=/home/pi/metro-map
-# Use the virtualenv Python when installed by the included installer script
-ExecStart=/home/pi/metro-map/.venv/bin/python /home/pi/metro-map/app.py
-Restart=on-failure
+Environment=PYTHONUNBUFFERED=1
+Environment=TMPDIR=/run/metro-map
+
+# Create RAM-based directory for runtime data
+RuntimeDirectory=metro-map
+RuntimeDirectoryMode=0755
+
+# Use the virtualenv Python
+ExecStart=/home/pi/metro-map/.venv/bin/python app.py
+
+# Reduce writes to SD card
+ReadWritePaths=/run/metro-map
+ProtectSystem=strict
+ProtectHome=read-only
+
+# Restart settings
+Restart=always
+RestartSec=10
 
 [Install]
 WantedBy=multi-user.target

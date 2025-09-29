@@ -1,117 +1,224 @@
 # DC Metro Map LED Display
 
-This project displays real-time DC Metro train positions using WS281x LED strips on a Raspberry Pi Zero W2.
+Real-time DC Metro train positions displayed on WS281x LED strips using a Raspberry Pi Zero W2. Features automatic daily restarts, memory management, and error recovery for reliable 24/7 operation.
 
 ## Hardware Requirements
 
-1. Raspberry Pi Zero W2
-2. WS281x LED strip (at least 27 LEDs for the Red Line stations)
-3. 5V power supply capable of powering your LED strip
-4. Three wires to connect the LED strip to the Pi
+1. Raspberry Pi Zero W2 (recommended) or any Raspberry Pi with WiFi
+2. WS281x LED strip (99 LEDs needed for full system map)
+3. 5V power supply:
+   - For <30 LEDs: Standard 2.5A Pi power supply works
+   - For full map (99 LEDs): 5V/10A power supply recommended
+4. Connection wires (22-20 AWG recommended)
+5. Optional: Project box or case
 
 ## Hardware Setup
 
-1. Connect the LED strip to your Raspberry Pi:
-   - Ground (GND) → Pi GND pin
-   - Power (5V) → Pi 5V pin
-   - Data Input (DI) → Pi GPIO18 (default)
+1. Power setup:
+   - **For <30 LEDs**: Connect LED strip's power directly to Pi's 5V and GND
+   - **For full map**:
+     - Connect power supply's GND to both Pi's GND and LED strip's GND
+     - Connect power supply's 5V directly to LED strip's 5V
+     - Connect Pi's GND to LED strip's GND (ensure common ground)
 
-   Note: If using a long LED strip or many LEDs, power the strip directly from the power supply rather than through the Pi.
+2. LED strip connections:
+   ```
+   LED Strip    →   Raspberry Pi
+   GND         →   GND (Pin 6)
+   DI (Data)   →   GPIO18 (Pin 12)
+   5V          →   See power setup above
+   ```
 
-## Software Setup
+3. Important notes:
+   - Keep data wire (DI) short to prevent signal issues
+   - Use capacitors across power/ground if seeing glitches
+   - Consider level shifter if seeing unreliable behavior
 
-1. Get a WMATA API key:
+## Software Installation
+
+1. Set up Raspberry Pi OS:
+   ```bash
+   # Download Raspberry Pi OS Lite (64-bit recommended)
+   # Flash to SD card using Raspberry Pi Imager
+   # Enable SSH and configure WiFi in Imager
+   ```
+
+2. First boot setup:
+   ```bash
+   # SSH into your Pi
+   ssh pi@your-pi-ip
+   
+   # Update system
+   sudo apt update && sudo apt upgrade -y
+   ```
+
+3. Install required packages:
+   ```bash
+   sudo apt install -y python3-pip python3-venv git
+   ```
+
+4. Get WMATA API key:
    - Visit https://developer.wmata.com/
-   - Sign up for a free account
-   - Create a new API key
+   - Sign up for free account
+   - Create new primary key
+   - Save key for next steps
 
-2. Install required system packages:
+5. Clone and setup project:
+   ```bash
+   # Clone repository
+   cd ~
+   git clone https://github.com/thenotoriousJeremy/metro-map.git
+   cd metro-map
+
+   # Create and activate virtual environment
+   python3 -m venv .venv
+   source .venv/bin/activate
+
+   # Install dependencies
+   pip install -r requirements.txt
+   ```
+
+6. Configure environment:
+   ```bash
+   # Create .env file with your WMATA API key
+   echo "WMATA_API_KEY=your-key-here" > .env
+
+   # Set permissions for LED control
+   sudo chmod a+rw /dev/mem
+   ```
+
+7. Run installation script:
+   ```bash
+   # Make script executable
+   chmod +x scripts/install-on-pi.sh
+
+   # Run installer
+   sudo ./scripts/install-on-pi.sh
+   ```
+
+## System Configuration
+
+The installer automatically configures:
+
+1. Systemd service for automatic startup
+2. Daily restart timer at 4 AM
+3. RAM-based runtime directory
+4. Memory optimization settings
+5. SD card write reduction
+
+To manually control the service:
 ```bash
-sudo apt update
-sudo apt install -y python3-pip python3-venv git
-```
-
-3. Clone and set up the project:
-```bash
-cd ~
-git clone https://github.com/thenotoriousJeremy/metro-map.git
-cd metro-map
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-4. Create a `.env` file with your WMATA API key:
-```bash
-echo "WMATA_API_KEY=your-api-key-here" > .env
-```
-
-5. Set up the systemd service:
-```bash
-sudo cp metro-map.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable metro-map
-sudo systemctl start metro-map
-```
-
-## Testing the Setup
-
-1. Check if the service is running:
-```bash
+# Check status
 sudo systemctl status metro-map
-```
 
-2. View the logs:
-```bash
+# Start/stop service
+sudo systemctl start metro-map
+sudo systemctl stop metro-map
+
+# View logs
 sudo journalctl -u metro-map -f
+
+# Check timer status
+sudo systemctl list-timers metro-map-restart.timer
 ```
 
-3. Test the web interface:
-   - Open a web browser to `http://<your-pi-ip>:5000`
-   - Click "Start Updates" to begin displaying train positions
-   - The LED strip should start showing train positions with comet effects
+## Web Interface
 
-## Configuration
+Access the control interface at:
+```
+http://<your-pi-ip>:5000
+```
 
-You can adjust several settings:
+Features:
+- Start/stop updates
+- View LED status
+- Monitor system health
+- Real-time train positions
 
-1. LED strip configuration in `led_controller.py`:
-   - `LED_COUNT`: Number of LEDs in your strip
-   - `PIN`: GPIO pin number (default: 18)
-   - `BRIGHTNESS`: LED brightness (0-255)
+## Monitoring & Maintenance
 
-2. Station mapping in `config.py`:
-   - Maps station codes to LED indices
-   - Adjust if you want to change which LED represents each station
+1. Health endpoint:
+   ```
+   http://<your-pi-ip>:5000/health
+   ```
+   Shows:
+   - Memory usage
+   - LED controller status
+   - Update thread status
 
-3. Update frequency in `app.py`:
-   - Change `time.sleep(10)` to adjust how often positions update
+2. Automatic maintenance:
+   - Daily restart at 4 AM
+   - Automatic restart if memory exceeds 95%
+   - Progressive error backoff
+   - Network connectivity monitoring
+
+3. Log viewing:
+   ```bash
+   # View service logs
+   sudo journalctl -u metro-map -f
+
+   # View last 100 logs
+   sudo journalctl -u metro-map -n 100
+
+   # View logs since last boot
+   sudo journalctl -u metro-map -b
+   ```
+
+## Customization
+
+1. LED configuration (`config.py`):
+   - Adjust `STATION_TO_LED` mapping
+   - Modify `LINE_COLORS` if needed
+   - Change `LED_COUNT` for different strip lengths
+
+2. Update frequency (`app.py`):
+   - Default: 10 seconds
+   - Modify `time.sleep(10)` in update loop
+
+3. Memory thresholds (`app.py`):
+   - Warning at 85% usage
+   - Restart at 95% usage
+
+4. Restart time (`scripts/metro-map-restart.timer`):
+   - Default: 4 AM
+   - Modify `OnCalendar` setting
 
 ## Troubleshooting
 
-1. If LEDs don't light up:
+1. LEDs not working:
    - Check physical connections
-   - Ensure correct GPIO pin is set in `led_controller.py`
-   - Run `sudo chmod a+rw /dev/mem` to give LED access permission
+   - Verify permissions: `sudo chmod a+rw /dev/mem`
+   - Test LED strip: `python map_stations.py`
 
-2. If web interface shows "LED controller not initialized":
-   - The script might not have permission to access GPIO
-   - Try running with sudo: `sudo -E python app.py`
+2. No train updates:
+   - Check WMATA API key in `.env`
+   - Verify network connection
+   - Check service logs for errors
 
-3. If no train data appears:
-   - Verify your WMATA API key in .env file
-   - Check internet connectivity
-   - Look for error messages in the logs
-
-4. If service fails to start:
+3. Service won't start:
    - Check logs: `sudo journalctl -u metro-map -n 50`
-   - Verify Python virtual environment path in service file
+   - Verify Python environment
+   - Check file permissions
 
-## API Endpoints
+4. High memory usage:
+   - Monitor `/health` endpoint
+   - Check logs for memory warnings
+   - Service will auto-restart if critical
 
-- `GET /` - Web interface
-- `GET /api/status` - Service status
-- `POST /start_updates` - Start train position updates
-- `POST /stop_updates` - Stop updates
-- `GET /led_status` - Current LED states
-- `POST /set_led` - Manually control LEDs
+5. System freezes:
+   - Wait for automatic daily restart
+   - Manual restart: `sudo systemctl restart metro-map`
+   - Check SD card health
+
+## Support
+
+For issues, please:
+1. Check the logs first
+2. Open an issue on GitHub with:
+   - Log output
+   - Hardware details
+   - Steps to reproduce
+
+## License
+
+MIT License - See LICENSE file for details

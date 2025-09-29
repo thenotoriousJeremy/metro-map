@@ -39,11 +39,35 @@ if [ ! -f .env ]; then
     echo "echo 'WMATA_API_KEY=your-api-key-here' > .env"
 fi
 
-# Copy service and enable
+# Set up minimal runtime directory in RAM
+mkdir -p /run/metro-map
+chown pi:pi /run/metro-map
+chmod 755 /run/metro-map
+
+# Copy service files and enable
 cp "$PROJECT_DIR/$SERVICE_NAME" /etc/systemd/system/
+cp "$PROJECT_DIR/scripts/metro-map-restart.timer" /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable metro-map
-systemctl start metro-map
+systemctl enable metro-map metro-map-restart.timer
+systemctl start metro-map metro-map-restart.timer
+
+# Add minimal RAM disk mount to fstab if not already present
+if ! grep -q "/run/metro-map" /etc/fstab; then
+    echo "tmpfs /run/metro-map tmpfs size=5M,mode=0755,uid=pi,gid=pi,noexec 0 0" >> /etc/fstab
+    mount /run/metro-map
+fi
+
+# Configure system for low memory usage
+if ! grep -q "vm.swappiness" /etc/sysctl.conf; then
+    cat >> /etc/sysctl.conf << EOF
+# Optimize for low memory usage
+vm.swappiness = 10
+vm.dirty_background_ratio = 1
+vm.dirty_ratio = 50
+vm.dirty_writeback_centisecs = 12000
+EOF
+    sysctl -p
+fi
 
 # Print status information
 echo "Installation complete!"
