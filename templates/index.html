@@ -32,6 +32,12 @@
             display: flex;
             align-items: center;
             gap: 10px;
+            padding: 5px;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        .station:hover {
+            background: #f8f8f8;
         }
         .led {
             width: 20px;
@@ -39,10 +45,23 @@
             border-radius: 50%;
             background: #ddd;
             display: inline-block;
-            transition: background-color 0.3s;
+            transition: all 0.3s ease;
         }
         .led.active {
-            box-shadow: 0 0 10px rgba(255,255,255,0.8);
+            animation: glow 2s infinite;
+        }
+        .led.pulse {
+            animation: pulse 1s infinite;
+        }
+        @keyframes glow {
+            0% { box-shadow: 0 0 5px rgba(255,255,255,0.8); }
+            50% { box-shadow: 0 0 15px rgba(255,255,255,0.8); }
+            100% { box-shadow: 0 0 5px rgba(255,255,255,0.8); }
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
         }
         button {
             padding: 10px 20px;
@@ -68,6 +87,13 @@
         .status.stopped {
             background: #f8d7da;
             color: #721c24;
+        }
+        .station-name {
+            flex: 1;
+        }
+        .station-code {
+            color: #666;
+            font-size: 0.9em;
         }
     </style>
 </head>
@@ -100,18 +126,24 @@
                 led.className = 'led';
                 led.id = `led-${data.index}`;
                 
-                const label = document.createElement('span');
-                label.textContent = `${data.name} (${code})`;
+                const nameDiv = document.createElement('div');
+                nameDiv.className = 'station-name';
+                nameDiv.textContent = data.name;
+                
+                const codeDiv = document.createElement('div');
+                codeDiv.className = 'station-code';
+                codeDiv.textContent = code;
                 
                 station.appendChild(led);
-                station.appendChild(label);
+                station.appendChild(nameDiv);
+                station.appendChild(codeDiv);
                 strip.appendChild(station);
             });
         }
 
         async function updateStatus() {
             try {
-                const response = await fetch('/');
+                const response = await fetch('/api/status');
                 const data = await response.json();
                 const status = document.getElementById('status');
                 status.textContent = `Status: ${data.auto_updates ? 'Running' : 'Stopped'} (LED Controller: ${data.led_initialized ? 'Initialized' : 'Not Initialized'})`;
@@ -137,6 +169,7 @@
                 // Clear all LEDs in the display
                 document.querySelectorAll('.led').forEach(led => {
                     led.style.backgroundColor = '#ddd';
+                    led.style.boxShadow = 'none';
                     led.classList.remove('active');
                 });
             } catch (error) {
@@ -153,16 +186,29 @@
                 // Reset all LEDs
                 document.querySelectorAll('.led').forEach(led => {
                     led.style.backgroundColor = '#ddd';
+                    led.style.boxShadow = 'none';
                     led.classList.remove('active');
                 });
                 
-                // Update active LEDs
+                // Update active LEDs with effects
                 data.leds.forEach(led => {
                     const ledElement = document.getElementById(`led-${led.index}`);
                     if (ledElement) {
                         const [r, g, b] = led.color;
-                        ledElement.style.backgroundColor = `rgb(${r},${g},${b})`;
+                        const brightness = led.brightness || 1.0;
+                        const alpha = Math.max(0.2, brightness);
+                        ledElement.style.backgroundColor = `rgba(${r},${g},${b},${alpha})`;
                         ledElement.classList.add('active');
+                        
+                        // Add pulse effect for multiple trains
+                        if (led.pulse) {
+                            ledElement.classList.add('pulse');
+                        } else {
+                            ledElement.classList.remove('pulse');
+                            // Add glow effect for single train
+                            const glowStrength = brightness * 10;
+                            ledElement.style.boxShadow = `0 0 ${glowStrength}px rgba(${r},${g},${b},${brightness})`;
+                        }
                     }
                 });
             } catch (error) {

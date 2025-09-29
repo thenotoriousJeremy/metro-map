@@ -40,29 +40,49 @@ class LEDController:
         """Check if LED strip is initialized."""
         return self.strip is not None
 
-    def set_pixel(self, index, r, g, b):
-        """Set color of a specific pixel.
+    def set_pixel(self, index, r, g, b, brightness=1.0):
+        """Set color of a specific pixel with brightness.
         
         Args:
             index (int): LED index
             r (int): Red value (0-255)
             g (int): Green value (0-255)
             b (int): Blue value (0-255)
+            brightness (float): Brightness factor (0.0-1.0)
         """
         if self.strip and 0 <= index < self.LED_COUNT:
+            r = int(r * brightness)
+            g = int(g * brightness)
+            b = int(b * brightness)
             self.strip.setPixelColor(index, Color(r, g, b))
 
-    def set_pixels(self, indices, r, g, b):
-        """Set multiple LEDs to the same color.
+    def set_comet(self, index, r, g, b, direction="right", trail_length=3):
+        """Set a comet effect with trailing lights.
         
         Args:
-            indices (list): List of LED indices to set
+            index (int): Center LED index
             r (int): Red value (0-255)
             g (int): Green value (0-255)
             b (int): Blue value (0-255)
+            direction (str): "right" or "left" for trail direction
+            trail_length (int): Number of LEDs in the trail
         """
-        for index in indices:
-            self.set_pixel(index, r, g, b)
+        if not self.strip:
+            return
+            
+        # Set the main LED at full brightness
+        self.set_pixel(index, r, g, b)
+        
+        # Calculate the range for the trail based on direction
+        if direction == "right":
+            trail_range = range(index + 1, min(index + trail_length + 1, self.LED_COUNT))
+        else:  # left
+            trail_range = range(index - 1, max(index - trail_length - 1, -1), -1)
+        
+        # Set trailing LEDs with decreasing brightness
+        for i, trail_index in enumerate(trail_range, 1):
+            brightness = 1.0 - (i / (trail_length + 1))
+            self.set_pixel(trail_index, r, g, b, brightness)
 
     def clear(self):
         """Turn off all LEDs."""

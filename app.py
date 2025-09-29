@@ -44,17 +44,56 @@ def update_leds():
             led_controller.clear()
             current_led_states.clear()
             
-            # Update LEDs based on train positions
+            # Collect trains at each station
+            station_trains = {}
             for train in trains:
                 station_code = train.get('StationCode')
                 line_code = train.get('LineCode')
+                direction_num = train.get('DirectionNum')
                 
                 if station_code and line_code:
-                    led_index = STATION_TO_LED.get(station_code)
-                    if led_index is not None:
-                        color = LINE_COLORS.get(line_code, (255, 255, 255))  # Default to white if unknown line
+                    if station_code not in station_trains:
+                        station_trains[station_code] = []
+                    station_trains[station_code].append({
+                        'line_code': line_code,
+                        'direction_num': direction_num
+                    })
+            
+            # Update LEDs based on trains at each station
+            for station_code, trains_at_station in station_trains.items():
+                led_index = STATION_TO_LED.get(station_code)
+                if led_index is not None:
+                    if len(trains_at_station) == 1:
+                        # Single train - use its color
+                        train = trains_at_station[0]
+                        color = LINE_COLORS.get(train['line_code'], (255, 255, 255))
+                        direction = "right" if train['direction_num'] == 1 else "left"
+                        led_controller.set_comet(led_index, *color, direction=direction)
+                        current_led_states[led_index] = {"color": color, "brightness": 1.0}
+                    else:
+                        # Multiple trains - blend colors
+                        r, g, b = 0, 0, 0
+                        for train in trains_at_station:
+                            color = LINE_COLORS.get(train['line_code'], (255, 255, 255))
+                            r += color[0]
+                            g += color[1]
+                            b += color[2]
+                        
+                        # Average the colors and ensure they don't exceed 255
+                        count = len(trains_at_station)
+                        color = (
+                            min(255, r // count),
+                            min(255, g // count),
+                            min(255, b // count)
+                        )
+                        
+                        # For multiple trains, pulse the LED instead of showing direction
                         led_controller.set_pixel(led_index, *color)
-                        current_led_states[led_index] = color
+                        current_led_states[led_index] = {
+                            "color": color,
+                            "brightness": 1.0,
+                            "pulse": True  # Add pulse flag for multiple trains
+                        }
             
             # Show the updates
             led_controller.show()
@@ -84,8 +123,12 @@ def led_status():
     """Return current LED states for the web interface."""
     return jsonify({
         "leds": [
-            {"index": index, "color": color}
-            for index, color in current_led_states.items()
+            {
+                "index": index,
+                "color": state["color"],
+                "brightness": state["brightness"]
+            }
+            for index, state in current_led_states.items()
         ]
     })
 
