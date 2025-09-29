@@ -1,0 +1,14 @@
+[Unit]
+Description=metro-map service
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/metro-map
+# Use the virtualenv Python when installed by the included installer script
+ExecStart=/home/pi/metro-map/.venv/bin/python /home/pi/metro-map/app.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
