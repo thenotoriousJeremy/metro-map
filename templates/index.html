@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>DC Metro Map LED Display</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f0f0f0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .controls {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f8f8;
+            border-radius: 4px;
+        }
+        .led-strip {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .station {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .led {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #ddd;
+            display: inline-block;
+            transition: background-color 0.3s;
+        }
+        .led.active {
+            box-shadow: 0 0 10px rgba(255,255,255,0.8);
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            background: #0066cc;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0052a3;
+        }
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .status.running {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.stopped {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>DC Metro Map LED Display</h1>
+        
+        <div class="controls">
+            <button onclick="startUpdates()">Start Updates</button>
+            <button onclick="stopUpdates()">Stop Updates</button>
+            <div id="status" class="status">Checking status...</div>
+        </div>
+
+        <div class="led-strip" id="ledStrip">
+            <!-- Will be populated by JavaScript -->
+        </div>
+    </div>
+
+    <script>
+        const stationData = {{station_data|tojson}};
+        const lineColors = {{line_colors|tojson}};
+        
+        function createLEDStrip() {
+            const strip = document.getElementById('ledStrip');
+            Object.entries(stationData).forEach(([code, data]) => {
+                const station = document.createElement('div');
+                station.className = 'station';
+                
+                const led = document.createElement('div');
+                led.className = 'led';
+                led.id = `led-${data.index}`;
+                
+                const label = document.createElement('span');
+                label.textContent = `${data.name} (${code})`;
+                
+                station.appendChild(led);
+                station.appendChild(label);
+                strip.appendChild(station);
+            });
+        }
+
+        async function updateStatus() {
+            try {
+                const response = await fetch('/');
+                const data = await response.json();
+                const status = document.getElementById('status');
+                status.textContent = `Status: ${data.auto_updates ? 'Running' : 'Stopped'} (LED Controller: ${data.led_initialized ? 'Initialized' : 'Not Initialized'})`;
+                status.className = `status ${data.auto_updates ? 'running' : 'stopped'}`;
+            } catch (error) {
+                console.error('Error updating status:', error);
+            }
+        }
+
+        async function startUpdates() {
+            try {
+                await fetch('/start_updates', { method: 'POST' });
+                updateStatus();
+            } catch (error) {
+                console.error('Error starting updates:', error);
+            }
+        }
+
+        async function stopUpdates() {
+            try {
+                await fetch('/stop_updates', { method: 'POST' });
+                updateStatus();
+                // Clear all LEDs in the display
+                document.querySelectorAll('.led').forEach(led => {
+                    led.style.backgroundColor = '#ddd';
+                    led.classList.remove('active');
+                });
+            } catch (error) {
+                console.error('Error stopping updates:', error);
+            }
+        }
+
+        // Update LED display
+        async function updateLEDs() {
+            try {
+                const response = await fetch('/led_status');
+                const data = await response.json();
+                
+                // Reset all LEDs
+                document.querySelectorAll('.led').forEach(led => {
+                    led.style.backgroundColor = '#ddd';
+                    led.classList.remove('active');
+                });
+                
+                // Update active LEDs
+                data.leds.forEach(led => {
+                    const ledElement = document.getElementById(`led-${led.index}`);
+                    if (ledElement) {
+                        const [r, g, b] = led.color;
+                        ledElement.style.backgroundColor = `rgb(${r},${g},${b})`;
+                        ledElement.classList.add('active');
+                    }
+                });
+            } catch (error) {
+                console.error('Error updating LEDs:', error);
+            }
+        }
+
+        // Initialize
+        createLEDStrip();
+        updateStatus();
+        
+        // Poll for updates every second
+        setInterval(() => {
+            updateStatus();
+            updateLEDs();
+        }, 1000);
+    </script>
+</body>
+</html>
