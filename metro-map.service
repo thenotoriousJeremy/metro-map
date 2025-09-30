@@ -15,8 +15,9 @@ RuntimeDirectory=metro-map
 RuntimeDirectoryMode=0755
 
 # Required capabilities for LED control
-AmbientCapabilities=CAP_SYS_RAWIO
-SupplementaryGroups=gpio video
+AmbientCapabilities=CAP_SYS_RAWIO CAP_MKNOD
+# Add all necessary groups for hardware access
+SupplementaryGroups=gpio spi i2c video
 
 # Use the virtualenv Python
 ExecStart=/home/jeremy/metro-map/.venv/bin/python app.py
@@ -27,9 +28,11 @@ ReadWritePaths=/home/jeremy/metro-map
 ProtectSystem=false
 ProtectHome=false
 
-# Give access to GPIO
-SupplementaryGroups=gpio
+# Give access to GPIO and other hardware
 DeviceAllow=/dev/gpiomem rw
+DeviceAllow=/dev/mem rw
+DeviceAllow=/dev/mailbox rw
+DevicePolicy=auto
 
 # Restart settings
 Restart=always
