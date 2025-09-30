@@ -34,10 +34,16 @@ with open('station_names.json', 'r') as f:
     STATION_NAMES = json.load(f)
 
 app = Flask(__name__)
-led_controller = LEDController(led_count=LED_COUNT)
+led_controller = LEDController(led_count=LED_COUNT)  # Will try real LEDs first, then simulate
 wmata_client = None
 update_thread = None
 should_update = False
+
+# Set up more verbose logging for development
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 # Dictionary to store current LED states
 current_led_states = {}
@@ -167,6 +173,7 @@ def api_status():
     return jsonify({
         "status": "running",
         "led_initialized": led_controller.is_initialized(),
+        "led_mode": "simulated" if getattr(led_controller, "simulated", False) else "real",
         "auto_updates": bool(update_thread and update_thread.is_alive())
     })
 

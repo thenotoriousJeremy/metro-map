@@ -43,6 +43,7 @@ def Color(red: int, green: int, blue: int) -> int:
 class LEDController:
     def __init__(self, led_count=30, pin=18, freq_hz=800000, dma=10, brightness=255, channel=0, invert=False):
         """Initialize LED controller with default settings for WS281x LEDs.
+        Attempts to initialize real LED hardware first, falls back to simulation if unsuccessful.
         
         Args:
             led_count (int): Number of LED pixels
