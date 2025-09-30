@@ -14,6 +14,10 @@ Environment=TMPDIR=/run/metro-map
 RuntimeDirectory=metro-map
 RuntimeDirectoryMode=0755
 
+# Required capabilities for LED control
+AmbientCapabilities=CAP_SYS_RAWIO
+SupplementaryGroups=gpio video
+
 # Use the virtualenv Python
 ExecStart=/home/jeremy/metro-map/.venv/bin/python app.py
 
