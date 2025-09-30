@@ -19,15 +19,14 @@ class WMATAClient:
         }
     
     def get_train_positions(self):
-        """Get real-time train positions.
-        
-        Returns:
-            list: List of train positions with their details
-        """
+        """Get real-time train positions."""
         endpoint = f"{self.base_url}/TrainPositions/TrainPositions"
-        response = requests.get(endpoint, headers=self.headers)
+        params = {"contentType": "json"}  # REQUIRED or WMATA returns 404
+        response = requests.get(endpoint, headers=self.headers, params=params, timeout=10)
         response.raise_for_status()
-        return response.json()["TrainPositions"]
+        data = response.json()
+        # Defensive: WMATA sometimes nests the key differently; default to []
+        return data.get("TrainPositions", data.get("trainPositions", []))
     
     def get_trains_at_station(self, station_code):
         """Get trains at a specific station.
