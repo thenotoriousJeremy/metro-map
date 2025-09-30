@@ -23,6 +23,7 @@ class SimulatedLED:
             g = (color >> 8) & 0xFF
             b = color & 0xFF
             self.leds[index] = (r, g, b)
+            logging.debug(f"Set LED {index} to RGB({r}, {g}, {b})")
     
     def begin(self) -> None:
         logging.info("Initialized simulated LED strip with %d LEDs", self.led_count)
@@ -32,9 +33,9 @@ class SimulatedLED:
         active_leds = [(i, color) for i, color in enumerate(self.leds) if color != (0, 0, 0)]
         if active_leds:
             sample = active_leds[:3]  # Show first 3 active LEDs
-            logging.debug("Active LEDs: %s %s", 
-                        ", ".join(f"LED {i}: RGB{color}" for i, color in sample),
-                        "..." if len(active_leds) > 3 else "")
+            logging.info("Active LEDs: %s %s", 
+                      ", ".join(f"LED {i}: RGB{color}" for i, color in sample),
+                      "..." if len(active_leds) > 3 else "")
 
 def Color(red: int, green: int, blue: int) -> int:
     """Convert the provided red, green, blue color to a 24-bit color value."""
@@ -62,10 +63,12 @@ class LEDController:
         self.CHANNEL = channel
         self.INVERT = invert
         self.strip = None
+        self.simulated = True  # Default to True, will be set to False on successful hardware init
         
-        # Only initialize the strip on Linux (Raspberry Pi)
-        if platform.system() == "Linux":
+        # Try to initialize real LED strip first
+        if platform.system() == "Linux" and LED_LIBRARY_AVAILABLE:
             try:
+                logging.info("Attempting to initialize real LED hardware...")
                 self.strip = PixelStrip(
                     num=self.LED_COUNT,
                     pin=self.PIN,
@@ -75,11 +78,29 @@ class LEDController:
                     brightness=self.BRIGHTNESS,
                     channel=self.CHANNEL
                 )
-                self.strip.begin()
+                # This is where the mailbox device error occurs
+                try:
+                    self.strip.begin()
+                    logging.info("Successfully initialized real LED strip!")
+                    self.simulated = False
+                    return
+                except RuntimeError as e:
+                    if "Failed to create mailbox device" in str(e):
+                        logging.warning("Failed to access mailbox device - insufficient permissions")
+                        self.strip = None
+                    else:
+                        raise
             except Exception as e:
-                import logging
-                logging.warning(f"LED initialization failed: {e}. Running in dummy mode.")
-                self.strip = None  # Run in dummy mode if initialization fails
+                logging.warning(f"LED initialization failed: {e}")
+                self.strip = None
+        else:
+            logging.info("Not on Linux or LED library not available")
+
+        # If we get here, either hardware init failed or we're not on Linux
+        logging.info("Using simulation mode...")
+        self.strip = SimulatedLED(led_count)
+        self.simulated = True
+        logging.info("Running in simulation mode - LED states will be logged")
     
     def is_initialized(self):
         """Check if LED strip is initialized."""
