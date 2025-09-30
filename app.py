@@ -66,9 +66,9 @@ def handle_exception(e):
     }), 500
 
 # Start updates on first request
-@app.before_first_request
-def before_first_request():
-    start_auto_updates()
+#@app.before_first_request
+#def before_first_request():
+#    start_auto_updates()
 
 def update_leds():
     """Background thread to update LEDs based on real-time train positions."""
