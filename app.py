@@ -109,94 +109,91 @@ def handle_exception(e):
 # Background updater thread
 # --------------------------------------------------------------------------------------
 def update_leds():
-    """Background thread to update LEDs based on real-time train positions."""
+    """Background thread: fetch WMATA predictions ~10s, update LEDs/UI every 1s.
+       - Single train at station: solid color (no comet).
+       - Multiple trains: blink between each train's line color.
+    """
     global should_update, current_led_states, wmata_client
 
     error_count = 0
-    last_success = time.time()
+    last_success = 0.0
+    last_fetch = 0.0
+    cache_ttl = 10.0  # seconds between WMATA fetches
+    cached_station_trains = {}  # station_code -> [ {"line_code": "RD"}, ... ]
 
     while should_update:
         try:
-            mem_usage = get_memory_usage()
-            if mem_usage:
-                if mem_usage['usage_percent'] > 85:
-                    logger.warning("High memory usage: %.1f%%", mem_usage['usage_percent'])
+            now = time.time()
 
-            if time.time() - last_success > 300:
-                logger.warning("No successful updates for 5 minutes - network issues?")
-
-            if wmata_client is None:
-                # Try (re)initializing WMATA client if it wasn't available
-                try:
+            # Refresh WMATA data every cache_ttl seconds
+            if now - last_fetch >= cache_ttl:
+                if wmata_client is None:
                     wmata_client = WMATAClient()
-                    logger.info("WMATA client (re)initialized in updater")
-                except Exception as e:
-                    logger.error("Failed to init WMATA client: %s", e)
-                    raise
+                preds = wmata_client.get_all_station_predictions()
+                logging.info("WMATA: fetched %d station predictions", len(preds))
 
-            preds = wmata_client.get_all_station_predictions()
-            logging.info("WMATA: fetched %d station predictions", len(preds))
+                # Build station->trains map from predictions
+                station_trains = {}
+                for p in preds:
+                    station_code = p.get("LocationCode") or p.get("LocationCode1")
+                    line_code = p.get("Line") or p.get("LineCode")
+                    if station_code and line_code and line_code in LINE_COLORS:
+                        station_trains.setdefault(station_code, []).append(
+                            {"line_code": line_code}
+                        )
+                cached_station_trains = station_trains
+                last_fetch = now
+                last_success = now
+                error_count = 0
 
-            # Clear LEDs and states
+            # Compute per-station color for this frame (blink phase)
+            # 1 Hz blink: switch color once per second
+            phase = int(time.time())  # integer seconds
             led_controller.clear()
             current_led_states.clear()
 
-            # Reset error tracking on success
-            error_count = 0
-            last_success = time.time()
-
-            # Collect trains at each station
-            station_trains = {}
-            for p in preds:
-                # WMATA fields in this feed
-                station_code = p.get("LocationCode") or p.get("LocationCode1")  # be defensive
-                line_code = p.get("Line") or p.get("LineCode")
-                # Only keep real line codes
-                if station_code and line_code and line_code in LINE_COLORS:
-                    station_trains.setdefault(station_code, []).append({
-                        "line_code": line_code,
-                        # DirectionNum is not in predictions; skip comet direction or infer later if needed
-                        "direction_num": None
-                    })
-
-
-            # Update LEDs based on trains at each station
-            for station_code, trains_at_station in station_trains.items():
+            for station_code, trains_at_station in cached_station_trains.items():
                 led_index = STATION_TO_LED.get(station_code)
-                if led_index is None:
+                if led_index is None or not trains_at_station:
                     continue
 
                 if len(trains_at_station) == 1:
-                    train = trains_at_station[0]
-                    color = LINE_COLORS.get(train['line_code'], (255, 255, 255))
-                    direction = "right" if train.get('direction_num') == 1 else "left"
-                    # comet to indicate direction + two-station trail handled in controller
-                    led_controller.set_comet(led_index, *color, direction=direction)
-                    current_led_states[led_index] = {"color": list(color), "brightness": 1.0}
+                    # Single train → solid color; NO comet
+                    line = trains_at_station[0]["line_code"]
+                    color = LINE_COLORS.get(line, (255, 255, 255))
+                    led_controller.set_pixel(led_index, *color)
+                    current_led_states[led_index] = {
+                        "color": list(color),
+                        "brightness": 1.0
+                    }
                 else:
-                    # Multiple trains: average/blend colors & pulse (no direction)
-                    r = g = b = 0
-                    for t in trains_at_station:
-                        cr, cg, cb = LINE_COLORS.get(t['line_code'], (255, 255, 255))
-                        r += cr; g += cg; b += cb
-                    count = len(trains_at_station)
-                    color = (min(255, r // count), min(255, g // count), min(255, b // count))
+                    # Multiple trains → blink between colors (no blending)
+                    colors = [LINE_COLORS.get(t["line_code"], (255, 255, 255))
+                              for t in trains_at_station]
+                    idx = phase % len(colors)   # pick which color this second
+                    color = colors[idx]
                     led_controller.set_pixel(led_index, *color)
                     current_led_states[led_index] = {
                         "color": list(color),
                         "brightness": 1.0,
-                        "pulse": True
+                        "blink": True,           # optional flag; UI can ignore
+                        "choices": [list(c) for c in colors]  # optional metadata
                     }
 
-            # Show the updates
             led_controller.show()
-            time.sleep(10)  # Update every 10 seconds
+
+            # Frame rate for UI/LED update
+            time.sleep(1.0)
+
+            # Soft warning if no successful fetch for a while
+            if time.time() - last_success > 300:
+                logging.warning("No successful WMATA fetch in 5 minutes.")
 
         except Exception as e:
             error_count += 1
-            logger.error("Error updating LEDs: %s", e)
-            wait_time = min(30 * error_count, 300)  # Progressive backoff, max 5 minutes
-            logger.warning("Waiting %d seconds before retry (error %d)", wait_time, error_count)
+            logging.error("Error in updater: %s", e)
+            wait_time = min(30 * error_count, 300)
+            logging.warning("Waiting %d seconds before retry (error %d)", wait_time, error_count)
             time.sleep(wait_time)
 
 # --------------------------------------------------------------------------------------
