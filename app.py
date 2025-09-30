@@ -134,18 +134,8 @@ def update_leds():
                     logger.error("Failed to init WMATA client: %s", e)
                     raise
 
-            trains = wmata_client.get_train_positions()
-
-            logger.info("WMATA: fetched %d train positions", len(trains))
-            if trains:
-                sample = trains[0]
-                logger.info(
-                    "WMATA sample: TrainId=%s Line=%s Station=%s Direction=%s",
-                    sample.get("TrainId"),
-                    sample.get("LineCode"),
-                    sample.get("StationCode"),
-                    sample.get("DirectionNum"),
-                )
+            preds = wmata_client.get_all_station_predictions()
+            logging.info("WMATA: fetched %d station predictions", len(preds))
 
             # Clear LEDs and states
             led_controller.clear()
@@ -157,15 +147,18 @@ def update_leds():
 
             # Collect trains at each station
             station_trains = {}
-            for train in trains:
-                station_code = train.get('StationCode')
-                line_code = train.get('LineCode')
-                direction_num = train.get('DirectionNum')
-                if station_code and line_code:
+            for p in preds:
+                # WMATA fields in this feed
+                station_code = p.get("LocationCode") or p.get("LocationCode1")  # be defensive
+                line_code = p.get("Line") or p.get("LineCode")
+                # Only keep real line codes
+                if station_code and line_code and line_code in LINE_COLORS:
                     station_trains.setdefault(station_code, []).append({
-                        'line_code': line_code,
-                        'direction_num': direction_num
+                        "line_code": line_code,
+                        # DirectionNum is not in predictions; skip comet direction or infer later if needed
+                        "direction_num": None
                     })
+
 
             # Update LEDs based on trains at each station
             for station_code, trains_at_station in station_trains.items():

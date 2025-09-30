@@ -17,7 +17,18 @@ class WMATAClient:
             "api_key": self.api_key,
             "Accept": "application/json"
         }
-    
+    def get_all_station_predictions(self):
+        """
+        Get next-train predictions for ALL stations in one call.
+        Returns a list of dicts with at least: LocationCode (station), Line (RD/BL/YL/OR/GR/SV).
+        """
+        endpoint = f"{self.base_url}/StationPrediction.svc/json/GetPrediction/All"
+        response = requests.get(endpoint, headers=self.headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        # Typical shape: {"Trains": [ {...}, ... ]}
+        return data.get("Trains", [])
+
     def get_train_positions(self):
         """Get real-time train positions."""
         endpoint = f"{self.base_url}/TrainPositions/TrainPositions"
