@@ -397,14 +397,6 @@ def start_auto_updates():
         update_thread.start()
         logger.info("Auto-updates started")
 
-# Flask 3.x alternative to before_first_request (optional)
-@app.before_serving
-def _start_updates_when_server_starts():
-    try:
-        start_auto_updates()
-    except Exception as e:
-        logger.error("Failed to start auto updates in before_serving: %s", e)
-
 if __name__ == '__main__':
     # Start updates when running directly (also covered by before_serving)
     try:
