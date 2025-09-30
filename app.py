@@ -53,6 +53,40 @@ should_update = False
 led_controller = LEDController(led_count=LED_COUNT, force_simulation=True)
 logging.info(f"LED Mode: {'Simulated' if led_controller.simulated else 'Real'}")
 
+# Initialize WMATA client
+api_key = os.environ.get('WMATA_API_KEY')
+if not api_key:
+    logging.error("WMATA_API_KEY environment variable not set")
+else:
+    wmata_client = WMATAClient(api_key)
+    logging.info("WMATA client initialized")
+
+# Start updates automatically
+should_update = True
+update_thread = threading.Thread(target=update_leds, daemon=True)
+update_thread.start()
+logging.info("Auto-updates started")
+
+# Dictionary to store current LED states
+current_led_states = {}
+
+# Initialize global variables
+wmata_client = None
+update_thread = None
+should_update = False
+
+# Initialize LED controller with simulation mode by default for safety
+led_controller = LEDController(led_count=LED_COUNT, force_simulation=True)
+logging.info(f"LED Mode: {'Simulated' if led_controller.simulated else 'Real'}")
+
+# Initialize WMATA client
+api_key = os.environ.get('WMATA_API_KEY')
+if not api_key:
+    logging.error("WMATA_API_KEY environment variable not set")
+else:
+    wmata_client = WMATAClient(api_key)
+    logging.info("WMATA client initialized")
+
 # Set up error handlers to avoid crashing on hardware issues
 @app.errorhandler(Exception)
 def handle_exception(e):
@@ -62,6 +96,11 @@ def handle_exception(e):
         "message": str(e),
         "led_mode": "simulated" if led_controller.simulated else "real"
     }), 500
+
+# Start updates on first request
+@app.before_first_request
+def before_first_request():
+    start_auto_updates()
 
 def update_leds():
     """Background thread to update LEDs based on real-time train positions."""
@@ -299,6 +338,19 @@ def set_led():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
+# Start updates automatically when the app starts
+def start_auto_updates():
+    global update_thread, should_update
+    if not update_thread or not update_thread.is_alive():
+        should_update = True
+        update_thread = threading.Thread(target=update_leds, daemon=True)
+        update_thread.start()
+        logging.info("Auto-updates started")
+
 if __name__ == '__main__':
+    # Start updates when running directly
+    start_auto_updates()
+    
+    # Run the Flask app
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
