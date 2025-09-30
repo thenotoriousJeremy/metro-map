@@ -25,8 +25,8 @@ import time
 log_handler = MemoryHandler(1024*5)  # Keep last 5KB of logs in memory
 logging.basicConfig(
     handlers=[log_handler],
-    level=logging.WARNING,  # Only log warnings and errors
-    format='%(levelname)s: %(message)s'  # Simplified format
+    level=logging.INFO,  # Set to INFO for more detailed logs
+    format='%(asctime)s - %(levelname)s - %(message)s'  # Include timestamps
 )
 
 # Load station names
@@ -34,38 +34,6 @@ with open('station_names.json', 'r') as f:
     STATION_NAMES = json.load(f)
 
 app = Flask(__name__)
-
-# Set up more verbose logging for development
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-
-# Dictionary to store current LED states
-current_led_states = {}
-
-# Initialize global variables
-wmata_client = None
-update_thread = None
-should_update = False
-
-# Initialize LED controller with simulation mode by default for safety
-led_controller = LEDController(led_count=LED_COUNT, force_simulation=True)
-logging.info(f"LED Mode: {'Simulated' if led_controller.simulated else 'Real'}")
-
-# Initialize WMATA client
-api_key = os.environ.get('WMATA_API_KEY')
-if not api_key:
-    logging.error("WMATA_API_KEY environment variable not set")
-else:
-    wmata_client = WMATAClient(api_key)
-    logging.info("WMATA client initialized")
-
-# Start updates automatically
-should_update = True
-update_thread = threading.Thread(target=update_leds, daemon=True)
-update_thread.start()
-logging.info("Auto-updates started")
 
 # Dictionary to store current LED states
 current_led_states = {}
