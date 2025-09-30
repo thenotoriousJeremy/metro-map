@@ -109,94 +109,105 @@ def handle_exception(e):
 # Background updater thread
 # --------------------------------------------------------------------------------------
 def update_leds():
-    """Background thread: fetch WMATA predictions ~10s, update LEDs/UI every 1s.
-       - Single train at station: solid color (no comet).
-       - Multiple trains: blink between each train's line color.
     """
+    Background loop:
+      - Fetch ALL station predictions every cache_ttl seconds (robust to WMATA hiccups).
+      - Only keep BRD (boarding) trains.
+      - Single train at station: solid line color.
+      - Multiple trains: blink between their colors (no blending/comet).
+      - Render LEDs/UI every 1s from the latest cached data.
+    """
+    import time
+    from time import monotonic, sleep
+
     global should_update, current_led_states, wmata_client
 
+    cache_ttl = 10.0             # seconds between WMATA fetches
+    next_fetch_time = 0.0         # monotonic timestamp when we should next fetch
+    last_success_mono = 0.0       # monotonic timestamp of last successful fetch
+    next_warn_time = 0.0          # rate-limit the 5-min warning
+    warn_interval = 30.0          # warn at most every 30s
+
     error_count = 0
-    last_success = 0.0
-    last_fetch = 0.0
-    cache_ttl = 10.0  # seconds between WMATA fetches
-    cached_station_trains = {}  # station_code -> [ {"line_code": "RD"}, ... ]
+    cached_station_trains = {}    # station_code -> [ {"line_code": "RD"}, ... ]
+
+    valid_lines = set(LINE_COLORS.keys())  # {"RD","BL","OR","SV","GR","YL"}
 
     while should_update:
-        try:
-            now = time.time()
+        now = monotonic()
 
-            # Refresh WMATA data every cache_ttl seconds
-            if now - last_fetch >= cache_ttl:
+        # FETCH (rate-limited)
+        if now >= next_fetch_time:
+            try:
                 if wmata_client is None:
                     wmata_client = WMATAClient()
                 preds = wmata_client.get_all_station_predictions()
                 logging.info("WMATA: fetched %d station predictions", len(preds))
 
-                # Build station->trains map from predictions
-                # Build station->trains map from predictions, but ONLY keep BRD (boarding)
+                # Build station->trains map; **BRD only**
                 station_trains = {}
+                brd_stations = 0
                 for p in preds:
                     station_code = p.get("LocationCode") or p.get("LocationCode1")
-                    line_code = p.get("Line") or p.get("LineCode")
-                    status = str(p.get("Min", "")).strip().upper()   # "BRD", "ARR", "DLY", "—", or "NN"
-                    if (
-                        station_code
-                        and line_code
-                        and line_code in LINE_COLORS
-                        and status == "BRD"          # <— ONLY BOARDING TRAINS
-                    ):
-                        station_trains.setdefault(station_code, []).append({"line_code": line_code})
+                    line_code = (p.get("Line") or p.get("LineCode") or "").upper().strip()
+                    raw_min = str(p.get("Min", "")).strip().upper()
+                    # Only "BRD" counts as boarding (strict)
+                    if not (station_code and line_code in valid_lines and raw_min == "BRD"):
+                        continue
+                    station_trains.setdefault(station_code, []).append({"line_code": line_code})
+                brd_stations = len(station_trains)
 
+                cached_station_trains = station_trains
+                error_count = 0
+                last_success_mono = now
+                next_fetch_time = now + cache_ttl
+                logging.info("Stations boarding now: %d", brd_stations)
 
-            # Compute per-station color for this frame (blink phase)
-            # 1 Hz blink: switch color once per second
-            phase = int(time.time())  # integer seconds
+            except Exception as e:
+                error_count += 1
+                logging.error("Failed to fetch predictions: %s", e)
+                # keep cached_station_trains as-is; try again later
+                backoff = min(30 * error_count, 300)
+                next_fetch_time = now + backoff
+                logging.warning("Retrying WMATA fetch in %d s (error %d)", int(backoff), error_count)
+
+        # RENDER from cache every 1s (blink between colors for multi-train stations)
+        phase = int(time.time())  # 1 Hz blinking based on wall clock seconds
+        try:
             led_controller.clear()
             current_led_states.clear()
 
+            lit = 0
             for station_code, trains_at_station in cached_station_trains.items():
                 led_index = STATION_TO_LED.get(station_code)
                 if led_index is None or not trains_at_station:
                     continue
 
                 if len(trains_at_station) == 1:
-                    # Single train → solid color; NO comet
                     line = trains_at_station[0]["line_code"]
                     color = LINE_COLORS.get(line, (255, 255, 255))
-                    led_controller.set_pixel(led_index, *color)
-                    current_led_states[led_index] = {
-                        "color": list(color),
-                        "brightness": 1.0
-                    }
                 else:
-                    # Multiple trains → blink between colors (no blending)
-                    colors = [LINE_COLORS.get(t["line_code"], (255, 255, 255))
-                              for t in trains_at_station]
-                    idx = phase % len(colors)   # pick which color this second
-                    color = colors[idx]
-                    led_controller.set_pixel(led_index, *color)
-                    current_led_states[led_index] = {
-                        "color": list(color),
-                        "brightness": 1.0,
-                        "blink": True,           # optional flag; UI can ignore
-                        "choices": [list(c) for c in colors]  # optional metadata
-                    }
+                    palette = [LINE_COLORS.get(t["line_code"], (255, 255, 255))
+                               for t in trains_at_station]
+                    color = palette[phase % len(palette)]  # blink
+
+                led_controller.set_pixel(led_index, *color)
+                current_led_states[led_index] = {"color": list(color), "brightness": 1.0}
+                lit += 1
 
             led_controller.show()
-
-            # Frame rate for UI/LED update
-            time.sleep(1.0)
-
-            # Soft warning if no successful fetch for a while
-            if time.time() - last_success > 300:
-                logging.warning("No successful WMATA fetch in 5 minutes.")
-
+            # Optional: small debug every 10s
+            # if phase % 10 == 0: logging.info("LEDs lit this frame: %d", lit)
         except Exception as e:
-            error_count += 1
-            logging.error("Error in updater: %s", e)
-            wait_time = min(30 * error_count, 300)
-            logging.warning("Waiting %d seconds before retry (error %d)", wait_time, error_count)
-            time.sleep(wait_time)
+            logging.error("LED render error: %s", e)
+
+        # 5-minute stale-data warning (rate-limited to avoid spam)
+        if last_success_mono > 0 and (now - last_success_mono) > 300 and now >= next_warn_time:
+            logging.warning("No successful WMATA fetch in 5 minutes.")
+            next_warn_time = now + warn_interval
+
+        sleep(1.0)
+
 
 # --------------------------------------------------------------------------------------
 # Routes
