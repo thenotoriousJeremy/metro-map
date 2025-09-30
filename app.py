@@ -48,6 +48,20 @@ logging.basicConfig(
 # Dictionary to store current LED states
 current_led_states = {}
 
+# Initialize LED controller with simulation mode by default for safety
+led_controller = LEDController(led_count=LED_COUNT, force_simulation=True)
+logging.info(f"LED Mode: {'Simulated' if led_controller.simulated else 'Real'}")
+
+# Set up error handlers to avoid crashing on hardware issues
+@app.errorhandler(Exception)
+def handle_exception(e):
+    logging.error(f"Unexpected error: {e}")
+    return jsonify({
+        "status": "error",
+        "message": str(e),
+        "led_mode": "simulated" if led_controller.simulated else "real"
+    }), 500
+
 def update_leds():
     """Background thread to update LEDs based on real-time train positions."""
     global should_update, current_led_states

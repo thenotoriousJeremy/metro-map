@@ -42,7 +42,7 @@ def Color(red: int, green: int, blue: int) -> int:
     return (red << 16) | (green << 8) | blue
 
 class LEDController:
-    def __init__(self, led_count=30, pin=18, freq_hz=800000, dma=10, brightness=255, channel=0, invert=False):
+    def __init__(self, led_count=30, pin=18, freq_hz=800000, dma=10, brightness=255, channel=0, invert=False, force_simulation=False):
         """Initialize LED controller with default settings for WS281x LEDs.
         Attempts to initialize real LED hardware first, falls back to simulation if unsuccessful.
         
@@ -54,6 +54,7 @@ class LEDController:
             brightness (int): Set to 0 for darkest and 255 for brightest
             channel (int): PWM channel to use
             invert (bool): True to invert the signal
+            force_simulation (bool): If True, always use simulation mode even if hardware is available
         """
         self.LED_COUNT = led_count
         self.PIN = pin
@@ -65,15 +66,15 @@ class LEDController:
         self.strip = None
         self.simulated = True  # Default to True, will be set to False on successful hardware init
         
+        # If force_simulation is True, skip hardware initialization
+        if force_simulation:
+            logging.info("Forced simulation mode enabled")
+            self.strip = SimulatedLED(led_count)
+            return
+
         # Try to initialize real LED strip first
         if platform.system() == "Linux" and LED_LIBRARY_AVAILABLE:
             try:
-                # Check if we're root - required for LED hardware access
-                import os
-                if os.geteuid() != 0:
-                    logging.warning("Not running as root - using simulation mode")
-                    raise RuntimeError("Root access required for LED hardware")
-                
                 logging.info("Attempting to initialize real LED hardware...")
                 self.strip = PixelStrip(
                     num=self.LED_COUNT,
@@ -85,17 +86,18 @@ class LEDController:
                     channel=self.CHANNEL
                 )
                 
+                # Initialize the hardware
                 try:
                     self.strip.begin()
+                    # Test the hardware by trying to set the first pixel
+                    self.strip.setPixelColor(0, 0)
+                    self.strip.show()
                     logging.info("Successfully initialized real LED strip!")
                     self.simulated = False
                     return
-                except RuntimeError as e:
-                    if "Failed to create mailbox device" in str(e):
-                        logging.warning("Failed to access mailbox device - insufficient permissions")
-                        raise RuntimeError("Mailbox device access required for LED hardware")
-                    else:
-                        raise
+                except Exception as e:
+                    logging.warning(f"LED hardware test failed: {e}")
+                    self.strip = None
             except Exception as e:
                 logging.warning(f"LED initialization failed: {e}")
                 self.strip = None
