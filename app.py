@@ -133,18 +133,20 @@ def update_leds():
                 logging.info("WMATA: fetched %d station predictions", len(preds))
 
                 # Build station->trains map from predictions
+                # Build station->trains map from predictions, but ONLY keep BRD (boarding)
                 station_trains = {}
                 for p in preds:
                     station_code = p.get("LocationCode") or p.get("LocationCode1")
                     line_code = p.get("Line") or p.get("LineCode")
-                    if station_code and line_code and line_code in LINE_COLORS:
-                        station_trains.setdefault(station_code, []).append(
-                            {"line_code": line_code}
-                        )
-                cached_station_trains = station_trains
-                last_fetch = now
-                last_success = now
-                error_count = 0
+                    status = str(p.get("Min", "")).strip().upper()   # "BRD", "ARR", "DLY", "—", or "NN"
+                    if (
+                        station_code
+                        and line_code
+                        and line_code in LINE_COLORS
+                        and status == "BRD"          # <— ONLY BOARDING TRAINS
+                    ):
+                        station_trains.setdefault(station_code, []).append({"line_code": line_code})
+
 
             # Compute per-station color for this frame (blink phase)
             # 1 Hz blink: switch color once per second
