@@ -1,5 +1,44 @@
-from rpi_ws281x import PixelStrip, Color
 import platform
+import logging
+from typing import List, Tuple
+
+# Try to import LED library, but don't fail if not available
+try:
+    from rpi_ws281x import PixelStrip, Color
+    LED_LIBRARY_AVAILABLE = True
+except ImportError:
+    LED_LIBRARY_AVAILABLE = False
+    logging.info("rpi_ws281x library not available, running in simulation mode")
+
+class SimulatedLED:
+    """Simulated LED strip for development and testing."""
+    def __init__(self, led_count: int):
+        self.led_count = led_count
+        self.leds: List[Tuple[int, int, int]] = [(0, 0, 0)] * led_count
+    
+    def setPixelColor(self, index: int, color: int) -> None:
+        if 0 <= index < self.led_count:
+            # Extract RGB from the color integer
+            r = (color >> 16) & 0xFF
+            g = (color >> 8) & 0xFF
+            b = color & 0xFF
+            self.leds[index] = (r, g, b)
+    
+    def begin(self) -> None:
+        logging.info("Initialized simulated LED strip with %d LEDs", self.led_count)
+    
+    def show(self) -> None:
+        # Log the first few active LEDs for debugging
+        active_leds = [(i, color) for i, color in enumerate(self.leds) if color != (0, 0, 0)]
+        if active_leds:
+            sample = active_leds[:3]  # Show first 3 active LEDs
+            logging.debug("Active LEDs: %s %s", 
+                        ", ".join(f"LED {i}: RGB{color}" for i, color in sample),
+                        "..." if len(active_leds) > 3 else "")
+
+def Color(red: int, green: int, blue: int) -> int:
+    """Convert the provided red, green, blue color to a 24-bit color value."""
+    return (red << 16) | (green << 8) | blue
 
 class LEDController:
     def __init__(self, led_count=30, pin=18, freq_hz=800000, dma=10, brightness=255, channel=0, invert=False):
