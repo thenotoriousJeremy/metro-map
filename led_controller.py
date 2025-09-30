@@ -25,16 +25,21 @@ class LEDController:
         
         # Only initialize the strip on Linux (Raspberry Pi)
         if platform.system() == "Linux":
-            self.strip = PixelStrip(
-                num=self.LED_COUNT,
-                pin=self.PIN,
-                freq_hz=self.FREQ_HZ,
-                dma=self.DMA,
-                invert=self.INVERT,
-                brightness=self.BRIGHTNESS,
-                channel=self.CHANNEL
-            )
-            self.strip.begin()
+            try:
+                self.strip = PixelStrip(
+                    num=self.LED_COUNT,
+                    pin=self.PIN,
+                    freq_hz=self.FREQ_HZ,
+                    dma=self.DMA,
+                    invert=self.INVERT,
+                    brightness=self.BRIGHTNESS,
+                    channel=self.CHANNEL
+                )
+                self.strip.begin()
+            except Exception as e:
+                import logging
+                logging.warning(f"LED initialization failed: {e}. Running in dummy mode.")
+                self.strip = None  # Run in dummy mode if initialization fails
     
     def is_initialized(self):
         """Check if LED strip is initialized."""
@@ -50,11 +55,21 @@ class LEDController:
             b (int): Blue value (0-255)
             brightness (float): Brightness factor (0.0-1.0)
         """
-        if self.strip and 0 <= index < self.LED_COUNT:
+        if not self.strip:
+            # In dummy mode, just log the operation
+            import logging
+            logging.debug(f"LED {index} would be set to RGB({r},{g},{b}) at {brightness} brightness")
+            return
+            
+        if 0 <= index < self.LED_COUNT:
             r = int(r * brightness)
             g = int(g * brightness)
             b = int(b * brightness)
-            self.strip.setPixelColor(index, Color(r, g, b))
+            try:
+                self.strip.setPixelColor(index, Color(r, g, b))
+            except Exception as e:
+                import logging
+                logging.warning(f"Failed to set LED {index}: {e}")
 
     def set_comet(self, index, r, g, b, direction="right", trail_length=3):
         """Set a comet effect with trailing lights.
@@ -93,5 +108,14 @@ class LEDController:
 
     def show(self):
         """Update the LED strip with all changes."""
-        if self.strip:
+        if not self.strip:
+            # In dummy mode, just log the operation
+            import logging
+            logging.debug("LED strip would update now")
+            return
+            
+        try:
             self.strip.show()
+        except Exception as e:
+            import logging
+            logging.warning(f"Failed to update LED strip: {e}")
