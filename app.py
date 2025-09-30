@@ -48,13 +48,20 @@ led_controller = LEDController(led_count=LED_COUNT, force_simulation=True)
 logging.info(f"LED Mode: {'Simulated' if led_controller.simulated else 'Real'}")
 
 # Initialize WMATA client
-api_key = os.environ.get('WMATA_API_KEY')
-if not api_key:
-    logging.error("WMATA_API_KEY environment variable not set")
-else:
-    wmata_client = WMATAClient(api_key)
-    logging.info("WMATA client initialized")
+#api_key = os.environ.get('WMATA_API_KEY')
+#if not api_key:
+#    logging.error("WMATA_API_KEY environment variable not set")
+#else:
+#    wmata_client = WMATAClient(api_key)
+#    logging.info("WMATA client initialized")
 
+try:
+    wmata_client = WMATAClient()
+    logging.info("WMATA client initialized")
+except Exception as e:
+    logging.error(f"WMATA client init failed: {e}")
+    wmata_client = None
+    
 # Set up error handlers to avoid crashing on hardware issues
 @app.errorhandler(Exception)
 def handle_exception(e):
