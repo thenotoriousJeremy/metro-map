@@ -111,103 +111,175 @@ def handle_exception(e):
 def update_leds():
     """
     Background loop:
-      - Fetch ALL station predictions every cache_ttl seconds (robust to WMATA hiccups).
-      - Only keep BRD (boarding) trains.
-      - Single train at station: solid line color.
-      - Multiple trains: blink between their colors (no blending/comet).
-      - Render LEDs/UI every 1s from the latest cached data.
+      • Fetch ALL station predictions every CACHE_TTL seconds (BRD only).
+      • Single train at station: solid line color.
+      • Multiple trains: blink between their colors (no blending/comets).
+      • After BRD ends at a station: long fade tail.
+      • While BRD: pre-glow ONE neighbor (not the one just left / fading).
+      • Render LEDs/UI every 1s from cached data; resilient to WMATA hiccups.
     """
     import time
     from time import monotonic, sleep
-
     global should_update, current_led_states, wmata_client
 
-    cache_ttl = 10.0             # seconds between WMATA fetches
-    next_fetch_time = 0.0         # monotonic timestamp when we should next fetch
-    last_success_mono = 0.0       # monotonic timestamp of last successful fetch
-    next_warn_time = 0.0          # rate-limit the 5-min warning
-    warn_interval = 30.0          # warn at most every 30s
+    # ---- tuning knobs ----
+    CACHE_TTL      = 10.0   # seconds between WMATA fetches
+    FADE_STEPS     = 24     # seconds of fade after BRD ends (long tail)
+    PREGLOW_RISE   = 12.0   # seconds to ramp neighbor up
+    MAX_PREGLOW    = 0.6    # neighbor max brightness (0..1)
+    WARN_AFTER     = 300.0  # warn if no successful fetch for 5 min
+    WARN_INTERVAL  = 30.0   # warn at most every 30s
 
-    error_count = 0
-    cached_station_trains = {}    # station_code -> [ {"line_code": "RD"}, ... ]
+    # ---- state ----
+    next_fetch_time     = 0.0
+    last_success_mono   = 0.0
+    next_warn_time      = 0.0
+    error_count         = 0
+    cached_station_trains = {}       # {station_code: [ {line_code: "RD"}, ... ]}
+    fading_leds           = {}       # {station_code: {"color": (r,g,b), "steps": int}}
+    brd_started_at        = {}       # {station_code: monotonic() when BRD first seen}
+    prev_brd              = set()    # stations that were BRD last frame
+    last_color_prev       = {}       # {station_code: (r,g,b)} color used last frame
 
-    valid_lines = set(LINE_COLORS.keys())  # {"RD","BL","OR","SV","GR","YL"}
+    # quick helpers
+    valid_lines = set(LINE_COLORS.keys())            # e.g., {"RD","BL","OR","SV","GR","YL"}
+    LED_TO_STATION = {idx: code for code, idx in STATION_TO_LED.items()}
 
     while should_update:
-        now = monotonic()
+        now_mono = monotonic()
 
-        # FETCH (rate-limited)
-        if now >= next_fetch_time:
+        # -------- FETCH (rate-limited with cache/backoff) --------
+        if now_mono >= next_fetch_time:
             try:
                 if wmata_client is None:
                     wmata_client = WMATAClient()
                 preds = wmata_client.get_all_station_predictions()
                 logging.info("WMATA: fetched %d station predictions", len(preds))
 
-                # Build station->trains map; **BRD only**
+                # Build station->trains map; STRICT BRD only
                 station_trains = {}
-                brd_stations = 0
                 for p in preds:
                     station_code = p.get("LocationCode") or p.get("LocationCode1")
                     line_code = (p.get("Line") or p.get("LineCode") or "").upper().strip()
-                    raw_min = str(p.get("Min", "")).strip().upper()
-                    # Only "BRD" counts as boarding (strict)
-                    if not (station_code and line_code in valid_lines and raw_min == "BRD"):
-                        continue
-                    station_trains.setdefault(station_code, []).append({"line_code": line_code})
-                brd_stations = len(station_trains)
+                    raw_min = str(p.get("Min", "")).strip().upper()  # "BRD","ARR","5","--","DLY",...
+                    if station_code and line_code in valid_lines and raw_min == "BRD":
+                        station_trains.setdefault(station_code, []).append({"line_code": line_code})
 
                 cached_station_trains = station_trains
+                last_success_mono = now_mono
                 error_count = 0
-                last_success_mono = now
-                next_fetch_time = now + cache_ttl
-                logging.info("Stations boarding now: %d", brd_stations)
+                next_fetch_time = now_mono + CACHE_TTL
+                logging.info("Stations boarding now: %d", len(cached_station_trains))
 
             except Exception as e:
                 error_count += 1
-                logging.error("Failed to fetch predictions: %s", e)
-                # keep cached_station_trains as-is; try again later
                 backoff = min(30 * error_count, 300)
-                next_fetch_time = now + backoff
+                next_fetch_time = now_mono + backoff
+                logging.error("Failed to fetch predictions: %s", e)
                 logging.warning("Retrying WMATA fetch in %d s (error %d)", int(backoff), error_count)
 
-        # RENDER from cache every 1s (blink between colors for multi-train stations)
-        phase = int(time.time())  # 1 Hz blinking based on wall clock seconds
+        # -------- RENDER from cache every 1s (blink + pre-glow + fades) --------
         try:
+            phase = int(time.time())  # 1 Hz blink phase by wall clock
             led_controller.clear()
             current_led_states.clear()
 
-            lit = 0
+            brd_now = set(cached_station_trains.keys())
+
+            # Start fades for stations that just stopped BRD
+            just_stopped = prev_brd - brd_now
+            for st in just_stopped:
+                color = last_color_prev.get(st)
+                if color:
+                    fading_leds[st] = {"color": color, "steps": FADE_STEPS}
+
+            last_color_this_frame = {}
+
+            # Render current BRD stations and pre-glow ONE neighbor (not fading)
             for station_code, trains_at_station in cached_station_trains.items():
                 led_index = STATION_TO_LED.get(station_code)
                 if led_index is None or not trains_at_station:
                     continue
 
+                # Choose color: single solid; multiple blink between their colors
                 if len(trains_at_station) == 1:
                     line = trains_at_station[0]["line_code"]
                     color = LINE_COLORS.get(line, (255, 255, 255))
                 else:
                     palette = [LINE_COLORS.get(t["line_code"], (255, 255, 255))
                                for t in trains_at_station]
-                    color = palette[phase % len(palette)]  # blink
+                    color = palette[phase % len(palette)]
 
-                led_controller.set_pixel(led_index, *color)
+                # Full-bright for BRD station
+                led_controller.set_pixel(led_index, *color, brightness=1.0)
                 current_led_states[led_index] = {"color": list(color), "brightness": 1.0}
-                lit += 1
+                last_color_this_frame[station_code] = color
+
+                # Pre-glow ONE neighbor (direction-agnostic but avoids the just-left/fading station)
+                start_t = brd_started_at.setdefault(station_code, monotonic())
+                elapsed = monotonic() - start_t
+                preglow_b = min(MAX_PREGLOW, (elapsed / PREGLOW_RISE) * MAX_PREGLOW)
+
+                # Candidates: immediate neighbors by LED index
+                candidates = []
+                for n_idx in (led_index + 1, led_index - 1):  # prefer +1; then -1
+                    if not (0 <= n_idx < LED_COUNT):
+                        continue
+                    neighbor_station = LED_TO_STATION.get(n_idx)
+                    if not neighbor_station:
+                        continue
+                    if neighbor_station in brd_now:          # neighbor already BRD → skip
+                        continue
+                    if neighbor_station in fading_leds:      # this is likely the just-left station → skip
+                        continue
+                    candidates.append(n_idx)
+
+                if candidates:
+                    n_idx = candidates[0]  # prefer +1 if available due to ordering above
+                    led_controller.set_pixel(n_idx, *color, brightness=preglow_b)
+                    current_led_states[n_idx] = {"color": list(color), "brightness": preglow_b}
+
+            # Clean BRD start times for stations no longer BRD
+            for st in list(brd_started_at.keys()):
+                if st not in brd_now:
+                    brd_started_at.pop(st, None)
+
+            # Render fade tails for stations that are no longer BRD
+            for station_code in list(fading_leds.keys()):
+                # Cancel fade if it became BRD again
+                if station_code in brd_now:
+                    fading_leds.pop(station_code, None)
+                    continue
+                info = fading_leds[station_code]
+                steps = info["steps"]
+                if steps <= 0:
+                    fading_leds.pop(station_code, None)
+                    continue
+                led_index = STATION_TO_LED.get(station_code)
+                if led_index is None:
+                    fading_leds.pop(station_code, None)
+                    continue
+                r, g, b = info["color"]
+                brightness = steps / FADE_STEPS
+                led_controller.set_pixel(led_index, r, g, b, brightness=brightness)
+                current_led_states[led_index] = {"color": [r, g, b], "brightness": brightness}
+                info["steps"] = steps - 1
 
             led_controller.show()
-            # Optional: small debug every 10s
-            # if phase % 10 == 0: logging.info("LEDs lit this frame: %d", lit)
+
+            # Persist per-frame state
+            prev_brd = brd_now
+            last_color_prev = last_color_this_frame
+
         except Exception as e:
             logging.error("LED render error: %s", e)
 
-        # 5-minute stale-data warning (rate-limited to avoid spam)
-        if last_success_mono > 0 and (now - last_success_mono) > 300 and now >= next_warn_time:
+        # Stale-data warning (rate-limited)
+        if last_success_mono > 0 and (now_mono - last_success_mono) > WARN_AFTER and now_mono >= next_warn_time:
             logging.warning("No successful WMATA fetch in 5 minutes.")
-            next_warn_time = now + warn_interval
+            next_warn_time = now_mono + WARN_INTERVAL
 
         sleep(1.0)
-
 
 # --------------------------------------------------------------------------------------
 # Routes
