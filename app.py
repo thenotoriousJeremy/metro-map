@@ -34,10 +34,6 @@ with open('station_names.json', 'r') as f:
     STATION_NAMES = json.load(f)
 
 app = Flask(__name__)
-led_controller = LEDController(led_count=LED_COUNT)  # Will try real LEDs first, then simulate
-wmata_client = None
-update_thread = None
-should_update = False
 
 # Set up more verbose logging for development
 logging.basicConfig(
@@ -47,6 +43,11 @@ logging.basicConfig(
 
 # Dictionary to store current LED states
 current_led_states = {}
+
+# Initialize global variables
+wmata_client = None
+update_thread = None
+should_update = False
 
 # Initialize LED controller with simulation mode by default for safety
 led_controller = LEDController(led_count=LED_COUNT, force_simulation=True)

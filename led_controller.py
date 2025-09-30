@@ -68,8 +68,9 @@ class LEDController:
         
         # If force_simulation is True, skip hardware initialization
         if force_simulation:
-            logging.info("Forced simulation mode enabled")
+            logging.info("Using simulation mode (forced)")
             self.strip = SimulatedLED(led_count)
+            self.simulated = True
             return
 
         # Try to initialize real LED strip first
@@ -102,7 +103,11 @@ class LEDController:
                 logging.warning(f"LED initialization failed: {e}")
                 self.strip = None
         else:
-            logging.info("Not on Linux or LED library not available")
+            # If we get here, either hardware init failed or we're not on Linux
+            # Initialize simulation mode
+            logging.info("Hardware initialization failed or not available - using simulation mode")
+            self.strip = SimulatedLED(led_count)
+            self.simulated = True
 
         # If we get here, either hardware init failed or we're not on Linux
         logging.info("Using simulation mode...")
