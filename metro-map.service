@@ -4,8 +4,8 @@ After=network.target
 
 [Service]
 Type=simple
-User=jeremy
-Group=jeremy
+User=root
+Group=root
 WorkingDirectory=/home/jeremy/metro-map
 Environment=PYTHONUNBUFFERED=1
 Environment=TMPDIR=/run/metro-map

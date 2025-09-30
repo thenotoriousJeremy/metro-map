@@ -68,6 +68,12 @@ class LEDController:
         # Try to initialize real LED strip first
         if platform.system() == "Linux" and LED_LIBRARY_AVAILABLE:
             try:
+                # Check if we're root - required for LED hardware access
+                import os
+                if os.geteuid() != 0:
+                    logging.warning("Not running as root - using simulation mode")
+                    raise RuntimeError("Root access required for LED hardware")
+                
                 logging.info("Attempting to initialize real LED hardware...")
                 self.strip = PixelStrip(
                     num=self.LED_COUNT,
@@ -78,7 +84,7 @@ class LEDController:
                     brightness=self.BRIGHTNESS,
                     channel=self.CHANNEL
                 )
-                # This is where the mailbox device error occurs
+                
                 try:
                     self.strip.begin()
                     logging.info("Successfully initialized real LED strip!")
@@ -87,7 +93,7 @@ class LEDController:
                 except RuntimeError as e:
                     if "Failed to create mailbox device" in str(e):
                         logging.warning("Failed to access mailbox device - insufficient permissions")
-                        self.strip = None
+                        raise RuntimeError("Mailbox device access required for LED hardware")
                     else:
                         raise
             except Exception as e:
