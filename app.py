@@ -78,10 +78,32 @@ should_update = False
 # LED controller: default to simulation unless explicitly disabled
 # Set METRO_FORCE_SIM=0 to try real hardware; any failure falls back to simulation.
 # --------------------------------------------------------------------------------------
-force_sim_env = os.environ.get("METRO_FORCE_SIM", "1").strip()
-force_simulation = force_sim_env not in ("0", "false", "False")
-led_controller = LEDController(led_count=LED_COUNT, force_simulation=force_simulation)
-logger.info("LED Mode: %s", "Simulated" if getattr(led_controller, "simulated", False) else "Real")
+# --- LED mode selection: default REAL, fallback to SIM ---
+mode_env = (os.environ.get("METRO_FORCE_SIM") or "").strip().lower()
+# Accepted values:
+#   "1", "true", "sim"   -> force simulation
+#   "0", "false", "real" -> force real
+#   "" (unset/other)     -> AUTO: try real, fallback to simulation
+
+force_simulation = None
+if mode_env in ("1", "true", "sim"):
+    force_simulation = True
+elif mode_env in ("0", "false", "real"):
+    force_simulation = False
+# else: leave as None for AUTO
+
+try:
+    led_controller = LEDController(led_count=LED_COUNT, force_simulation=force_simulation)
+    if getattr(led_controller, "simulated", False):
+        logger.info("LED Mode: Simulated")
+    else:
+        logger.info("LED Mode: Real")
+except Exception as e:
+    # Absolute last resort fallback to sim so the app stays alive
+    logger.error("LED hardware init error, falling back to simulation: %s", e)
+    led_controller = LEDController(led_count=LED_COUNT, force_simulation=True)
+    logger.info("LED Mode: Simulated (fallback)")
+
 
 # --------------------------------------------------------------------------------------
 # WMATA client (reads WMATA_API_KEY from .env/env internally; no constructor args)

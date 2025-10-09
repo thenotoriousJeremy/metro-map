@@ -4,3 +4,10 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 
+.github/copilot-instructions.md
+.vscode/extensions.json
+ssh
+.gitignore
+scripts/setup-headless.ps1
+.gitignore
+wpa_supplicant.conf.template
