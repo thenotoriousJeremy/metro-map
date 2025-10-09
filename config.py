@@ -4,54 +4,54 @@
 
 STATION_TO_LED = {
     # Red Line (0-26)
-    'A15': 0,   # Shady Grove
-    'A14': 1,   # Rockville
-    'A13': 2,   # Twinbrook
-    'A12': 3,   # White Flint
-    'A11': 4,   # Grosvenor-Strathmore
-    'A10': 5,   # Medical Center
-    'A09': 6,   # Bethesda
-    'A08': 7,   # Friendship Heights
-    'A07': 8,   # Tenleytown-AU
-    'A06': 9,   # Van Ness-UDC
-    'A05': 10,  # Cleveland Park
-    'A04': 11,  # Woodley Park
-    'A03': 12,  # Dupont Circle
-    'A02': 13,  # Farragut North
-    'A01': 14,  # Metro Center
-    'B01': 15,  # Gallery Place
-    'B02': 16,  # Judiciary Square
-    'B03': 17,  # Union Station
-    'B04': 18,  # NoMa-Gallaudet U
-    'B05': 19,  # Rhode Island Ave
-    'B06': 20,  # Brookland-CUA
-    'B07': 21,  # Fort Totten
-    'B08': 22,  # Takoma
-    'B09': 23,  # Silver Spring
-    'B10': 24,  # Forest Glen
-    'B11': 25,  # Wheaton
-    'B12': 26,  # Glenmont
+    'A15': 37,   # Shady Grove
+    'A14': 38,   # Rockville
+    'A13': 39,   # Twinbrook
+    'A12': 40,   # White Flint
+    'A11': 41,   # Grosvenor-Strathmore
+    'A10': 42,   # Medical Center
+    'A09': 43,   # Bethesda
+    'A08': 44,   # Friendship Heights
+    'A07': 45,   # Tenleytown-AU
+    'A06': 46,   # Van Ness-UDC
+    'A05': 47,  # Cleveland Park
+    'A04': 48,  # Woodley Park
+    'A03': 49,  # Dupont Circle
+    'A02': 50,  # Farragut North
+    'A01': 13,  # Metro Center
+    'B01': 52,  # Gallery Place
+    'B02': 72,  # Judiciary Square
+    'B03': 71,  # Union Station
+    'B04': 70,  # NoMa-Gallaudet U
+    'B05': 69,  # Rhode Island Ave
+    'B06': 68,  # Brookland-CUA
+    'B07': 67,  # Fort Totten
+    'B08': 58,  # Takoma
+    'B09': 59,  # Silver Spring
+    'B10': 60,  # Forest Glen
+    'B11': 61,  # Wheaton
+    'B12': 62,  # Glenmont
 
     # Blue/Yellow/Green Line South (27-47)
-    'C15': 27,  # Huntington
-    'C14': 28,  # Eisenhower Avenue
-    'C13': 29,  # King St-Old Town
-    'C12': 30,  # Braddock Road
-    'C11': 31,  # Potomac Yard
-    'C10': 32,  # Ronald Reagan Airport
-    'C09': 33,  # Crystal City
-    'C08': 34,  # Pentagon City
-    'C07': 35,  # Pentagon
+    'C15': 0,  # Huntington
+    'C14': 1,  # Eisenhower Avenue
+    'C13': 2,  # King St-Old Town
+    'C12': 3,  # Braddock Road
+    'C11': 4,  # Potomac Yard
+    'C10': 5,  # Ronald Reagan Airport
+    'C09': 6,  # Crystal City
+    'C08': 7,  # Pentagon City
+    'C07': 8,  # Pentagon
     'C06': 36,  # Arlington Cemetery
-    'C05': 37,  # Rosslyn
-    'C04': 38,  # Foggy Bottom-GWU
-    'C03': 39,  # Farragut West
-    'C02': 40,  # McPherson Square
-    'C01': 41,  # Metro Center
-    'D01': 42,  # Federal Triangle
-    'D02': 43,  # Smithsonian
-    'D03': 44,  # L'Enfant Plaza
-    'D04': 45,  # Federal Center SW
+    'C05': 17,  # Rosslyn
+    'C04': 16,  # Foggy Bottom-GWU
+    'C03': 15,  # Farragut West
+    'C02': 14,  # McPherson Square
+    'C01': 13,  # Metro Center
+    'D01': 12,  # Federal Triangle
+    'D02': 11,  # Smithsonian
+    'D03': 10,  # L'Enfant Plaza
+    'D04': 9,  # Federal Center SW
     'D05': 46,  # Capitol South
     'D06': 47,  # Eastern Market
 
@@ -65,14 +65,14 @@ STATION_TO_LED = {
     'D13': 54,  # New Carrollton
 
     # Green Line North (55-63)
-    'E01': 55,  # Mt Vernon Sq
-    'E02': 56,  # Shaw-Howard U
-    'E03': 57,  # U Street
-    'E04': 58,  # Columbia Heights
-    'E05': 59,  # Georgia Ave-Petworth
-    'E06': 60,  # West Hyattsville
-    'E07': 61,  # Prince George's Plaza
-    'E08': 62,  # College Park-U of MD
+    'E01': 53,  # Mt Vernon Sq
+    'E02': 54,  # Shaw-Howard U
+    'E03': 55,  # U Street
+    'E04': 56,  # Columbia Heights
+    'E05': 57,  # Georgia Ave-Petworth
+    'E06': 66,  # West Hyattsville
+    'E07': 65,  # Prince George's Plaza
+    'E08': 64,  # College Park-U of MD
     'E09': 63,  # Greenbelt
 
     # Green Line South (64-74)
@@ -96,14 +96,14 @@ STATION_TO_LED = {
     'G05': 79,  # Largo Town Center
 
     # Orange Line West (80-87)
-    'K01': 80,  # Court House
-    'K02': 81,  # Clarendon
-    'K03': 82,  # Virginia Square-GMU
-    'K04': 83,  # Ballston-MU
-    'K05': 84,  # East Falls Church
-    'K06': 85,  # West Falls Church
-    'K07': 86,  # Dunn Loring
-    'K08': 87,  # Vienna
+    'K01': 18,  # Court House
+    'K02': 19,  # Clarendon
+    'K03': 20,  # Virginia Square-GMU
+    'K04': 21,  # Ballston-MU
+    'K05': 22,  # East Falls Church
+    'K06': 25,  # West Falls Church
+    'K07': 24,  # Dunn Loring
+    'K08': 23,  # Vienna
 
     # Silver Line West (88-98)
     'N01': 88,  # McLean
