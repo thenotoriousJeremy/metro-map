@@ -132,39 +132,32 @@ def handle_exception(e):
 # --------------------------------------------------------------------------------------
 def update_leds():
     """
-    Background loop:
-      • Fetch ALL station predictions every CACHE_TTL seconds (BRD only).
-      • Single train at station: solid line color.
-      • Multiple trains: blink between their colors.
-      • After BRD ends at a station: fade tail.
-      • NO pre-lighting, NO comets.
+    Simplified LED updater:
+      • Only lights stations where Min == "BRD"
+      • Solid color for each train's line
+      • Multiple trains at same station -> blink between their line colors
+      • No fading, no comets, no prelighting
     """
     import time
     from time import monotonic, sleep
     global should_update, current_led_states, wmata_client
 
-    # ---- tuning ----
-    CACHE_TTL     = 10.0   # fetch period (s)
-    FADE_STEPS    = 24     # seconds of fade after BRD ends
-    WARN_AFTER    = 300.0  # warn if no successful fetch in 5 min
-    WARN_INTERVAL = 30.0   # warn at most every 30s
+    CACHE_TTL = 10.0  # fetch new data every 10 seconds
+    WARN_AFTER = 300.0
+    WARN_INTERVAL = 30.0
 
-    # ---- state ----
-    next_fetch_time     = 0.0
-    last_success_mono   = 0.0
-    next_warn_time      = 0.0
-    error_count         = 0
-    cached_station_trains = {}       # {station_code: [ {"line_code": "RD"}, ... ]}
-    fading_leds           = {}       # {station_code: {"color": (r,g,b), "steps": int}}
-    prev_brd              = set()    # stations BRD last frame
-    last_color_prev       = {}       # {station_code: (r,g,b)} shown last frame
+    next_fetch_time = 0.0
+    last_success_mono = 0.0
+    next_warn_time = 0.0
+    error_count = 0
+    cached_station_trains = {}
 
-    valid_lines = set(LINE_COLORS.keys())  # e.g., {"RD","BL","OR","SV","GR","YL"}
+    valid_lines = set(LINE_COLORS.keys())  # e.g. {"RD", "BL", "OR", "SV", "GR", "YL"}
 
     while should_update:
         now_mono = monotonic()
 
-        # ---------- FETCH (rate-limited, cached) ----------
+        # ---------- FETCH WMATA DATA ----------
         if now_mono >= next_fetch_time:
             try:
                 if wmata_client is None:
@@ -172,7 +165,7 @@ def update_leds():
                 preds = wmata_client.get_all_station_predictions()
                 logging.info("WMATA: fetched %d station predictions", len(preds))
 
-                # Build station->trains map; STRICT BRD only
+                # Filter: BRD only
                 station_trains = {}
                 for p in preds:
                     station_code = p.get("LocationCode") or p.get("LocationCode1")
@@ -193,30 +186,18 @@ def update_leds():
                 logging.error("Failed to fetch predictions: %s", e)
                 logging.warning("Retrying WMATA fetch in %d s (error %d)", int(backoff), error_count)
 
-        # ---------- RENDER (no prelight, no comets) ----------
+        # ---------- RENDER LEDs ----------
         try:
-            phase = int(time.time())  # 1 Hz blink
+            phase = int(time.time())  # 1Hz blink for multiple trains
             led_controller.clear()
             current_led_states.clear()
 
-            brd_now = set(cached_station_trains.keys())
-
-            # Start fades for stations that just stopped BRD
-            just_stopped = prev_brd - brd_now
-            for st in just_stopped:
-                color = last_color_prev.get(st)
-                if color:
-                    fading_leds[st] = {"color": color, "steps": FADE_STEPS}
-
-            last_color_this_frame = {}
-
-            # Render current BRD stations
             for station_code, trains_at_station in cached_station_trains.items():
                 led_index = STATION_TO_LED.get(station_code)
                 if led_index is None or not trains_at_station:
                     continue
 
-                # choose color: single solid; multiple blink between colors
+                # One color if one train, alternate if multiple trains
                 if len(trains_at_station) == 1:
                     line = trains_at_station[0]["line_code"]
                     color = LINE_COLORS.get(line, (255, 255, 255))
@@ -227,43 +208,11 @@ def update_leds():
 
                 led_controller.set_pixel(led_index, *color, brightness=1.0)
                 current_led_states[led_index] = {"color": list(color), "brightness": 1.0}
-                last_color_this_frame[station_code] = color
-
-            # Render fade tails for stations no longer BRD
-            for station_code in list(fading_leds.keys()):
-                if station_code in brd_now:
-                    fading_leds.pop(station_code, None)
-                    continue
-                info = fading_leds[station_code]
-                steps = info["steps"]
-                if steps <= 0:
-                    fading_leds.pop(station_code, None)
-                    continue
-                led_index = STATION_TO_LED.get(station_code)
-                if led_index is None:
-                    fading_leds.pop(station_code, None)
-                    continue
-                r, g, b = info["color"]
-                brightness = steps / FADE_STEPS
-                led_controller.set_pixel(led_index, r, g, b, brightness=brightness)
-                current_led_states[led_index] = {"color": [r, g, b], "brightness": brightness}
-                info["steps"] = steps - 1
 
             led_controller.show()
 
-            # persist for next frame
-            prev_brd = brd_now
-            last_color_prev = last_color_this_frame
-
         except Exception as e:
-            logging.error("LED render error: %s", e)
-
-        # stale-data warning
-        if last_success_mono > 0 and (now_mono - last_success_mono) > WARN_AFTER and now_mono >= next_warn_time:
-            logging.warning("No successful WMATA fetch in 5 minutes.")
-            next_warn_time = now_mono + WARN_INTERVAL
-
-        sleep(1.0)
+            logging.error("LED render error: %s"
 
 # --------------------------------------------------------------------------------------
 # Routes
