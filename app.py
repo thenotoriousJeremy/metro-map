@@ -212,7 +212,14 @@ def update_leds():
             led_controller.show()
 
         except Exception as e:
-            logging.error("LED render error: %s"
+            logging.error("LED render error: %s", e)
+
+        # ---------- WARN IF STALE ----------
+        if last_success_mono > 0 and (now_mono - last_success_mono) > WARN_AFTER and now_mono >= next_warn_time:
+            logging.warning("No successful WMATA fetch in 5 minutes.")
+            next_warn_time = now_mono + WARN_INTERVAL
+
+        sleep(1.0)
 
 # --------------------------------------------------------------------------------------
 # Routes
