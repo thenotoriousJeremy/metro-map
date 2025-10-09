@@ -52,17 +52,17 @@ STATION_TO_LED = {
     'D02': 11,  # Smithsonian
     'D03': 10,  # L'Enfant Plaza
     'D04': 9,  # Federal Center SW
-    'D05': 46,  # Capitol South
-    'D06': 47,  # Eastern Market
+    'D05': 73,  # Capitol South
+    'D06': 74,  # Eastern Market
 
     # Orange/Silver Line East (48-52)
-    'D07': 48,  # Potomac Ave
-    'D08': 49,  # Stadium-Armory
-    'D09': 50,  # Minnesota Ave
-    'D10': 51,  # Deanwood
-    'D11': 52,  # Cheverly
-    'D12': 53,  # Landover
-    'D13': 54,  # New Carrollton
+    'D07': 75,  # Potomac Ave
+    'D08': 76,  # Stadium-Armory
+    'D09': 77,  # Minnesota Ave
+    'D10': 78,  # Deanwood
+    'D11': 79,  # Cheverly
+    'D12': 80,  # Landover
+    'D13': 81,  # New Carrollton
 
     # Green Line North (55-63)
     'E01': 53,  # Mt Vernon Sq
@@ -76,24 +76,24 @@ STATION_TO_LED = {
     'E09': 63,  # Greenbelt
 
     # Green Line South (64-74)
-    'F01': 64,  # Gallery Place
-    'F02': 65,  # Archives
-    'F03': 66,  # L'Enfant Plaza
-    'F04': 67,  # Waterfront
-    'F05': 68,  # Navy Yard-Ballpark
-    'F06': 69,  # Anacostia
-    'F07': 70,  # Congress Heights
-    'F08': 71,  # Southern Avenue
-    'F09': 72,  # Naylor Road
-    'F10': 73,  # Suitland
-    'F11': 74,  # Branch Ave
+    'F01': 52,  # Gallery Place
+    'F02': 51,  # Archives
+    'F03': 10,  # L'Enfant Plaza
+    'F04': 94,  # Waterfront
+    'F05': 93,  # Navy Yard-Ballpark
+    'F06': 92,  # Anacostia
+    'F07': 91,  # Congress Heights
+    'F08': 90,  # Southern Avenue
+    'F09': 89,  # Naylor Road
+    'F10': 88,  # Suitland
+    'F11': 87,  # Branch Ave
 
     # Blue/Silver Line East (75-79)
-    'G01': 75,  # Benning Road
-    'G02': 76,  # Capitol Heights
-    'G03': 77,  # Addison Road
-    'G04': 78,  # Morgan Boulevard
-    'G05': 79,  # Largo Town Center
+    'G01': 86,  # Benning Road
+    'G02': 85,  # Capitol Heights
+    'G03': 84,  # Addison Road
+    'G04': 83,  # Morgan Boulevard
+    'G05': 82,  # Largo Town Center
 
     # Orange Line West (80-87)
     'K01': 18,  # Court House
@@ -106,17 +106,17 @@ STATION_TO_LED = {
     'K08': 23,  # Vienna
 
     # Silver Line West (88-98)
-    'N01': 88,  # McLean
-    'N02': 89,  # Tysons
-    'N03': 90,  # Greensboro
-    'N04': 91,  # Spring Hill
-    'N06': 92,  # Wiehle-Reston East
-    'N07': 93,  # Reston Town Center
-    'N08': 94,  # Herndon
-    'N09': 95,  # Innovation Center
-    'N10': 96,  # Dulles Airport
-    'N11': 97,  # Loudoun Gateway
-    'N12': 98,  # Ashburn
+    'N01': 26,  # McLean
+    'N02': 27,  # Tysons
+    'N03': 28,  # Greensboro
+    'N04': 29,  # Spring Hill
+    'N06': 30,  # Wiehle-Reston East
+    'N07': 31,  # Reston Town Center
+    'N08': 32,  # Herndon
+    'N09': 33,  # Innovation Center
+    'N10': 34,  # Dulles Airport
+    'N11': 35,  # Loudoun Gateway
+    'N12': 36,  # Ashburn
 }
 
 # Color codes for different train lines
